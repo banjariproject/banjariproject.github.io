@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MedAssist</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23475569'/%3E%3Crect x='42' y='25' width='16' height='50' fill='white' rx='5'/%3E%3Crect x='25' y='42' width='50' height='16' fill='white' rx='5'/%3E%3C/svg%3E" type="image/svg+xml">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
@@ -144,7 +145,15 @@
                     <span id="errorMessage">Invalid credentials</span>
                 </div>
                 <input id="email" type="email" placeholder="Email" class="w-full px-6 py-4 rounded-2xl outline-none bg-slate-50 border border-slate-200 font-semibold text-slate-800 focus:border-slate-400 transition-colors" required>
-                <input id="password" type="password" placeholder="Password" class="w-full px-6 py-4 rounded-2xl outline-none bg-slate-50 border border-slate-200 font-semibold text-slate-800 focus:border-slate-400 transition-colors" required>
+                
+                <!-- Password Field with Toggle -->
+                <div class="relative">
+                    <input id="password" type="password" placeholder="Password" class="w-full px-6 py-4 rounded-2xl outline-none bg-slate-50 border border-slate-200 font-semibold text-slate-800 focus:border-slate-400 transition-colors pr-14" required>
+                    <button type="button" onclick="togglePasswordVisibility()" class="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors rounded-xl hover:bg-slate-100/50">
+                        <i class="fas fa-eye" id="password-eye-icon"></i>
+                    </button>
+                </div>
+
                 <button type="submit" id="authSubmitBtn" class="w-full py-5 bg-slate-800 text-white text-lg font-bold rounded-2xl shadow-lg mt-6 active:scale-95 transition-all">Sign In</button>
             </form>
             <button onclick="toggleAuthMode()" id="toggleBtn" class="mt-8 text-slate-500 font-bold text-sm underline underline-offset-4">Create an account</button>
@@ -226,7 +235,7 @@
 
                 <div id="status-card" class="bg-white rounded-[2.5rem] p-8 border border-slate-300 shadow-sm">
                     <h2 id="greeting-date" class="text-xl font-extrabold text-slate-800">Daily Goal</h2>
-                    <p id="summary-text" class="text-slate-500 text-base mt-2 font-medium">No schedule for this day.</p>
+                    <p id="summary-text" class="text-slate-500 text-base mt-2 font-medium">0 of 0 completed.</p>
                 </div>
 
                 <div id="schedule-container" class="space-y-4"></div>
@@ -434,6 +443,20 @@
             document.getElementById('authTitle').innerText = isLogin ? "Join MedAssist" : "MedAssist";
         }
 
+        function togglePasswordVisibility() {
+            const input = document.getElementById('password');
+            const icon = document.getElementById('password-eye-icon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+            }
+        }
+
         function logout() { window.location.reload(); }
 
         function toggleSettingsModal(show) {
@@ -454,7 +477,32 @@
         }
 
         // --- APP LOGIC ---
-        const renderAll = () => { renderStrip(); renderSchedule(); renderLibrary(); updateSummary(); };
+        
+        // Helper to get meds for specific day (shared logic)
+        function getMedsForDate(date) {
+            return medications.filter(m => {
+                const start = new Date(m.startDate); start.setHours(0,0,0,0);
+                const end = m.endDate ? new Date(m.endDate) : null;
+                if (end) end.setHours(0,0,0,0);
+
+                if (date < start) return false;
+                if (end && date > end) return false;
+
+                const diff = dateDiffInDays(date, start);
+                if (m.frequency === 'every-other' && diff % 2 !== 0) return false;
+                if (m.frequency === 'weekly' && diff % 7 !== 0) return false;
+
+                return true;
+            }).sort((a,b) => a.time.localeCompare(b.time));
+        }
+
+        const renderAll = () => { 
+            const dailyMeds = getMedsForDate(selectedDate);
+            renderStrip(); 
+            renderSchedule(dailyMeds); 
+            renderLibrary(); 
+            updateSummary(dailyMeds); 
+        };
 
         const renderStrip = () => {
             const container = document.getElementById('calendar-strip');
@@ -474,32 +522,17 @@
             }
         };
 
-        const renderSchedule = () => {
+        const renderSchedule = (dailyMeds) => {
             const container = document.getElementById('schedule-container');
             const key = selectedDate.toDateString();
             const done = completedDoses[key] || [];
             
-            // Filter meds based on selected date
-            const visibleMeds = medications.filter(m => {
-                const start = new Date(m.startDate); start.setHours(0,0,0,0);
-                const end = m.endDate ? new Date(m.endDate) : null;
-                if (end) end.setHours(0,0,0,0);
-
-                if (selectedDate < start) return false;
-                if (end && selectedDate > end) return false;
-
-                const diff = dateDiffInDays(selectedDate, start);
-                if (m.frequency === 'every-other' && diff % 2 !== 0) return false;
-                if (m.frequency === 'weekly' && diff % 7 !== 0) return false;
-
-                return true;
-            }).sort((a,b) => a.time.localeCompare(b.time));
-            
-            if(visibleMeds.length === 0) {
+            if(dailyMeds.length === 0) {
                 container.innerHTML = `<div class="text-center text-slate-400 font-extrabold py-20 italic text-sm tracking-widest opacity-60">No medications scheduled for today.</div>`;
                 return;
             }
-            container.innerHTML = visibleMeds.map(m => {
+            
+            container.innerHTML = dailyMeds.map(m => {
                 const isDone = done.includes(m.id);
                 return `<div class="bg-white p-6 rounded-[2rem] flex items-center justify-between border border-slate-300 shadow-sm">
                     <div class="flex items-center gap-5">
@@ -536,11 +569,11 @@
                 </div>`).join('');
         };
 
-        const updateSummary = () => {
-            const container = document.getElementById('schedule-container');
-            const totalOnDay = container.children.length;
+        const updateSummary = (dailyMeds) => {
+            const totalOnDay = dailyMeds.length;
             const done = (completedDoses[selectedDate.toDateString()] || []).length;
-            document.getElementById('summary-text').innerText = totalOnDay > 0 ? `${done} of ${totalOnDay} completed.` : "No schedule for this day.";
+            // Now strictly shows "X of Y" even if Y is 0.
+            document.getElementById('summary-text').innerText = `${done} of ${totalOnDay} completed.`;
         };
 
         window.toggleDose = (id) => {
