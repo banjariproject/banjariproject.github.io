@@ -267,6 +267,8 @@
         border-radius: 14px;
         font-size: 14px;
         background: rgba(255,255,255,0.03);
+        border: 1px solid var(--glass-border);
+        color: white;
     }
 
     .ai-send-btn {
@@ -723,7 +725,7 @@
               </button>
           </div>
           <div id="ai-chat-body">
-              <div class="message ai">Greetings! I am your Banjari language assistant. How can I help you learn about our traditions or words today?</div>
+              <div class="message ai">Greetings! I am your Banjari language assistant powered by the Groq Free Tier. How can I help you today?</div>
           </div>
           <div class="ai-input-area">
               <input type="text" id="ai-input" placeholder="Ask about a word or tradition..." onkeypress="if(event.key==='Enter') sendMessage()">
@@ -815,7 +817,7 @@
           <h4>The Story of the Banjari Storyteller, Arav</h4>
           <p>In the wide, dusty plains of Rajasthan, a young Banjara boy named Arav traveled with his family's caravan. Arav loved the journey, but he often wondered, "What is my gift?"</p>
           <p>One evening, he heard a storyteller—an old Banjara woman. Arav felt something stir inside him. When he got back to camp, he picked up a small drum and began tapping lightly… Then he added words… Then a rhythm… Then a story.</p>
-          <p>Later that night, his grandmother Nanni placed a silver coin necklace around his neck. "This is to remind you: That our people carry their home inside their hearts and now, you carry our stories."</p>
+          <p>Later night, his grandmother Nanni placed a silver coin necklace around his neck. "This is to remind you: That our people carry their home inside their hearts and now, you carry our stories."</p>
         </article>
         <article class="story">
           <h4>Hansel and Gretel (Banjari Edition)</h4>
@@ -837,7 +839,7 @@
       <p style="color: var(--muted); margin-bottom: 24px;">Watch community elders discussing linguistic preservation and heritage.</p>
       <div class="video-container">
           <iframe 
-              src="https://drive.google.com/file/d/1QjCaKTs70m16ihrL_68KWRUPG8GpO6gJ/preview" 
+              src="https://www.youtube.com/embed/Kxrb4HRhGCA" 
               title="Banjari Community Interview" 
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
               referrerpolicy="strict-origin-when-cross-origin"
@@ -905,11 +907,6 @@
       </div>
     </section>
 
-    <section id="langwall">
-      <h2>Our Language Wall</h2>
-      <img src="pictures/langwall.jpg" alt="Project Language Wall Display">
-    </section>
-
     <section id="credits">
       <h2>Preservation Team</h2>
       <ul>
@@ -957,18 +954,21 @@
   </footer>
 
   <script>
-    const apiKey = ""; 
+    const apiKey = "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"; 
     const systemPrompt = "You are a warm and knowledgeable expert for the Banjari Language Project. Your goal is to help users learn about the language, culture, and history of the Banjara people. Encourage users to preserve the language. Keep responses concise and respectful.";
 
+    // Optimized for Groq Free Tier limits (High speed, 429-aware)
     async function callGroq(query) {
         const url = `https://api.groq.com/openai/v1/chat/completions`;
         const payload = {
-            model: "llama-3.3-70b-versatile",
+            // Using llama-3.1-8b-instant for the best balance of speed and higher Free Plan rate limits
+            model: "llama-3.1-8b-instant",
             messages: [
                 { role: "system", content: systemPrompt },
                 { role: "user", content: query }
             ],
-            temperature: 0.7
+            temperature: 0.6,
+            max_tokens: 500
         };
 
         const fetchWithBackoff = async (retries = 5, delay = 1000) => {
@@ -981,10 +981,14 @@
                     },
                     body: JSON.stringify(payload)
                 });
+                if (response.status === 429) {
+                    throw new Error("Rate limit reached (429)");
+                }
                 if (!response.ok) throw new Error(`API error: ${response.status}`);
                 return await response.json();
             } catch (error) {
                 if (retries > 0) {
+                    // Exponential backoff to handle the 30 RPM limit on Groq Free Plan
                     await new Promise(res => setTimeout(res, delay));
                     return fetchWithBackoff(retries - 1, delay * 2);
                 }
@@ -1042,7 +1046,7 @@
             const responseText = data.choices?.[0]?.message?.content || "I'm sorry, I couldn't process that.";
             aiMsg.textContent = responseText;
         } catch (error) {
-            aiMsg.textContent = "Apologies, connection interrupted.";
+            aiMsg.textContent = "Apologies, the connection is busy. Please try again in 30 seconds.";
         } finally {
             btn.disabled = false;
             chatBody.scrollTop = chatBody.scrollHeight;
